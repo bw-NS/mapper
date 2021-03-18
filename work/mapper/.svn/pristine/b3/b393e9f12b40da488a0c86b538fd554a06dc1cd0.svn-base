@@ -1,0 +1,483 @@
+/*
+ * To change this license header, choose License Headers in Project Properties.
+ * To change this template file, choose Tools | Templates
+ * and open the template in the editor.
+ */
+#include <thread>
+#include "m4.h"
+#include "intersection.h"
+#include "unordered_map"
+#include "StreetsDatabaseAPI.h"
+#include "node.h"
+#include <queue>
+#include <algorithm>
+#include "m1.h"
+#include "m3_function_declaration.h"
+#include "m3.h"
+#include "node.h"
+
+
+extern std::vector<StreetSegmentInfo> Seg_Info;
+extern std::vector<std::vector<unsigned>> intersectionSeg;
+extern std::vector<LatLon> positionInt;
+
+
+double find_path_to_available_intersections(const unsigned intersect_id_start, 
+                                               const std::vector<unsigned>& closest_int_to_POI,
+                                               const double turn_penalty, unsigned & next_inter);
+
+double find_weight_between_intersections(const unsigned intersect_id_start, 
+                                                      const unsigned intersect_id_end,
+                                                      const double turn_penalty); 
+
+std::vector<unsigned> traveling_courier(const std::vector<DeliveryInfo>& deliveries, 
+                                        const std::vector<unsigned>& depots, 
+                                        const float turn_penalty){
+    
+    //get all the intersections from the inputs
+    
+    std::vector<intersection> intersection_list;
+    intersection_list.resize(getNumberOfIntersections());
+    intersection foo;
+    std::vector<unsigned> pickup_list; //record all pickups that are not drop off
+    
+    
+    for(unsigned i=0; i<deliveries.size(); i++){
+        unsigned pickup=deliveries[i].pickUp;
+        unsigned dropoff=deliveries[i].dropOff;
+        pickup_list.push_back(pickup);
+        if(intersection_list[pickup]!=foo){
+                                    
+                intersection temp=intersection_list[pickup];
+                temp.pickup=1;
+                temp.Codropoff.push_back(dropoff);
+                intersection_list[pickup]=temp;
+                
+        }
+        else {
+            
+            intersection temp(1,0, {dropoff}, {});
+            intersection_list[pickup]=temp;           
+            
+        }
+        
+        if(intersection_list[dropoff]!=foo){
+                                    
+                intersection temp=intersection_list[dropoff];
+                temp.dropoff=1;
+                temp.Copickup.push_back(pickup);
+                intersection_list[dropoff]=temp;
+                
+        }
+        else {
+            
+            intersection temp(0,1, {}, {pickup});
+            intersection_list[dropoff]=temp;           
+            
+        }
+        
+        
+        
+    }
+    unsigned erased=0;
+    for(unsigned i=0; i<pickup_list.size();i++){
+        
+        if(intersection_list[pickup_list[i-erased]].dropoff){
+            pickup_list.erase(pickup_list.begin()+i-erased);
+            erased++;
+        }
+        
+    }
+    
+    
+    //start of greedy 
+    
+    //sort the depot closest to one 
+    
+    //choose a depot
+    
+ 
+    
+    std::priority_queue<std::pair<double, unsigned>, std::vector<std::pair<double, unsigned>>, std::greater<std::pair<double,unsigned>>> depot_list;
+    unsigned next;  
+    for(unsigned i=0; i<depots.size(); i++){
+        
+        double temp=find_path_to_available_intersections(depots[i],  pickup_list, turn_penalty,  next);
+        if(temp==-1){}
+        else depot_list.emplace(temp, depots[i]);
+        
+    }
+    
+    unsigned chosen_depot = depot_list.top().second;  //will be change later
+    //find the depot closest to pickup with most drop off
+    
+    
+    
+    
+    std::vector<unsigned> available_list=pickup_list;
+    //chose the closest available intersection to the depot
+    unsigned next_inter;
+    unsigned current=chosen_depot;
+    std::vector<std::pair<unsigned,double>> weight;
+    std::pair<unsigned, double > start(chosen_depot, 0);
+    weight.push_back(start);
+    while(available_list.size()!=0){
+    
+        double temp=find_path_to_available_intersections(current,  available_list, turn_penalty,  next_inter);
+
+        if(temp==-1) return {};
+        
+        current=next_inter;
+        available_list.erase(std::find(available_list.begin(), available_list.end(), current));
+        
+        std::vector<unsigned> drops=intersection_list[current].Codropoff;
+        for(unsigned i=0; i<drops.size();i++){
+            
+            if(intersection_list[drops[i]].Copickup.size()==1) available_list.push_back(drops[i]);
+            else {
+                 
+                 intersection itsc=intersection_list[drops[i]];
+                 itsc.Copickup.pop_back();
+                 intersection_list[drops[i]]=itsc;
+                 
+            }
+                
+        }
+
+        std::pair<unsigned, double> nod(current, temp);
+        weight.push_back(nod);
+
+    }
+    double temp=find_path_to_available_intersections(weight[weight.size()-1].first,  depots, turn_penalty,  next_inter);
+    std::pair<unsigned, double> nod(next_inter, temp);
+    weight.push_back(nod);
+    
+    //end of greedy
+    
+    
+    // start of 2opt
+    
+    bool changed=1;
+    //while(changed){
+        changed=0;
+    for(unsigned i=1; i<weight.size()-2;i++){
+        for(unsigned k=i+1; k<=i+1/*weight.size()-1*/; k++){
+            //if two path intersect do following? 
+            bool changable=1;
+            
+            
+            
+            
+            //reverse the middle part, check if is reversable        
+            
+            for(unsigned j=i; j<k&&changable; j++){
+                
+                std::vector<unsigned>drops;
+                
+                if(intersection_list[weight[j].first].pickup)                        
+                        drops=intersection_list[weight[j].first].Codropoff;
+                        
+                  
+                for(unsigned q=j+1; q<=k; q++){                    
+                    if(drops.size()!=0){                        
+                        if(std::find(drops.begin(),drops.end(), weight[q].first)!=drops.end()) {
+                            changable=0;
+                            break;
+                        }
+                    }                    
+                }
+            }
+            
+            
+            if(changable) {
+                
+                double old_weight=0;
+                for(unsigned z=i; z<=k+1; z++)                   
+                    old_weight+=weight[z].second;
+                
+                double new_weight=0;
+                std::vector<std::pair<unsigned, double>> temp_weight;
+                double a=find_weight_between_intersections(weight[i-1].first, weight[k].first, turn_penalty);
+                new_weight+=a;
+                std::pair<unsigned, double> Kth(weight[k].first,a);
+                temp_weight.push_back(Kth);
+                
+                
+                
+                for(unsigned z=k; z>i; z--){
+                    
+                    a=find_weight_between_intersections(weight[z].first, weight[z-1].first, turn_penalty);
+                    new_weight+=a;
+                    std::pair<unsigned, double> temp(weight[z-1].first,a);
+                    temp_weight.push_back(temp);
+                }
+                
+                a=find_weight_between_intersections(weight[i].first, weight[k+1].first, turn_penalty);
+                new_weight+=a;
+                std::pair<unsigned, double> K1th(weight[k+1].first,a);
+                temp_weight.push_back(K1th);
+                //i to k+1 
+                //function to calculate new_weight (i-1, k) (reverse) (i,k+1)
+                
+                
+                if(new_weight<old_weight){
+                    changed=1;
+                    for(unsigned z=i; z<=k+1; z++)
+                        weight[z]=temp_weight[z-i];
+                    
+                    
+                }
+   
+            }
+            
+            
+        }
+    }
+    //}
+    
+    //end of 2-opt
+    //then try greedy on next depot 
+    
+    
+    //final path
+    
+    std::vector<unsigned> final_path;
+    for(unsigned i=0; i<weight.size()-1;i++){
+        
+        std::vector<unsigned> a=find_path_between_intersections(weight[i].first,  weight[i+1].first, turn_penalty); 
+        final_path.insert(final_path.end(), a.begin(), a.end());
+    
+    }
+    return final_path;
+    
+}
+
+double find_weight_between_intersections(const unsigned intersect_id_start, 
+                                                      const unsigned intersect_id_end,
+                                                      const double turn_penalty){
+    if(intersect_id_start==intersect_id_end) return 0;
+    
+    std::vector<unsigned> result;
+    std::priority_queue<std::pair<double, unsigned>, std::vector<std::pair<double, unsigned>>, std::greater<std::pair<double,unsigned>>> Queue; //   weight|intersection_index
+    std::vector<node> visited_list;
+    std::vector<node> node_list;
+    unsigned unusedInt=getNumberOfIntersections();
+    visited_list.resize(unusedInt);
+    node_list.resize(unusedInt);
+    node foo;
+    
+    unsigned current=intersect_id_start;            //initialize
+    
+    unsigned unusedstr=getNumberOfStreetSegments();
+    
+    std::pair<double, unsigned> first(0, current);
+    Queue.emplace(first); 
+    
+    node start(current,unusedstr,unusedInt,0);
+    node_list[current]= start;
+           
+  
+    while(current!=intersect_id_end&&Queue.size()!=0){       
+        
+        
+        double previous_weight=node_list[current].weight;
+        
+       
+       
+        node current_node=node_list[current];
+        node_list[current]=foo;
+        visited_list[current]= current_node;
+        Queue.pop();
+        //std::vector<unsigned> avail_int=available_intersections(current, visited_list);  //check the flag
+        std::vector<unsigned> segs = intersectionSeg[current];
+   
+        std::vector<unsigned> next_seg_vec;
+    
+    //loop through the segments that connect to the intersection id
+        for (unsigned i = 0; i < segs.size(); i++) {
+            StreetSegmentInfo temp = Seg_Info[segs[i]];
+        //insert the element if this segment is "from" this id
+        if (temp.from == current) {
+            if(visited_list[temp.to]==foo)
+            next_seg_vec.push_back(segs[i]);
+        //if intersection_id is not "from", check if this segment is one-way
+        //if is one-way, then insert this element
+        } else if (!temp.oneWay) {
+            if(visited_list[temp.from]==foo)
+            next_seg_vec.push_back(segs[i]); 
+        }
+    }
+        
+        
+        unsigned   num_Seg = next_seg_vec.size();   //need to get the available segs form previous line
+        //go through all the segs of the current intersection; insert neighbours in queue
+        
+        for(unsigned i=0; i<num_Seg; i++){
+            
+            unsigned seg_index=next_seg_vec[i]; 
+            unsigned other_end;
+            if(Seg_Info[seg_index].from==current) other_end=Seg_Info[seg_index].to;
+            else other_end=Seg_Info[seg_index].from;
+            double weight=find_street_segment_travel_time(seg_index);  //travel time of seg
+            weight=weight+previous_weight;                              //plus the previous
+            StreetSegmentInfo info1=Seg_Info[seg_index];
+            unsigned n_street_id=info1.streetID;
+            
+           
+            
+            if(current_node.from_segID!=unusedstr){
+                
+                if(Seg_Info[current_node.from_segID].streetID!=n_street_id) weight=weight+turn_penalty;          //add turn penalty
+                
+            }
+            
+            
+            node next_node(other_end,seg_index,current,weight);
+            if(node_list[other_end]!=foo&&node_list[other_end].weight<next_node.weight){}
+            else {node_list[other_end]=next_node;double distance=find_distance_between_two_point(positionInt[intersect_id_end],positionInt[other_end] );
+            
+            weight=weight+10*distance;
+            
+            
+            //std::pair<double, unsigned> weighted_node(weight, other_end);     //put new node to queue
+            Queue.emplace(weight, other_end);
+            }
+            
+            
+            
+    
+        }
+    
+    
+    if(Queue.empty()){return -1;}
+        else current=((Queue.top()).second); 
+    //prepare for the next loop 
+      //int start_s=clock();  
+    while(visited_list[current]!=foo){
+        Queue.pop();
+        if(Queue.empty()){return -1;}
+        else current=((Queue.top()).second); //start with first in queue 
+    }
+    //int stop_s=clock();
+      // std::cout << "time: " << (stop_s-start_s)/double(CLOCKS_PER_SEC)*1000 << std::endl;
+    }
+    
+    
+    if(current==intersect_id_end){
+        //int start_s=clock();
+
+        
+        //trace back 
+         
+        return node_list[intersect_id_end].weight;
+       
+        
+    }
+    
+    else return -1;
+    
+    
+}
+
+
+double find_path_to_available_intersections(const unsigned intersect_id_start, 
+                                               const std::vector<unsigned>& closest_int_to_POI,
+                                               const double turn_penalty, unsigned & next_inter){
+    std::vector<unsigned> result;
+    std::priority_queue<std::pair<double, unsigned>, std::vector<std::pair<double, unsigned>>, std::greater<std::pair<double,unsigned>>> Queue; //   weight|intersection_index
+    
+    std::unordered_map<unsigned, node> visited_list;     //   key:intersection index
+    std::unordered_map<unsigned, node> node_list;
+    
+    unsigned current=intersect_id_start;            //initialize
+    unsigned unusedInt=getNumberOfIntersections();  
+    unsigned unusedstr=getNumberOfStreetSegments();
+    
+    std::pair<double, unsigned> first(0, current);
+    Queue.emplace(first); 
+    
+    node start(current,unusedstr,unusedInt,0);
+    node_list.emplace(current, start);
+             
+    
+    
+    if(std::find(closest_int_to_POI.begin(), closest_int_to_POI.end(), intersect_id_start)!=closest_int_to_POI.end()) return 0;
+    
+    
+    while(std::find(closest_int_to_POI.begin(), closest_int_to_POI.end(), current)==closest_int_to_POI.end()&&Queue.size()!=0){       
+        
+        
+        double previous_weight=node_list[current].weight;
+        
+       // std::vector<unsigned> previous_node=(Queue.top()).second; //record before deleting
+       
+        node current_node=node_list[current];
+        node_list.erase(current);
+        visited_list.emplace(current, current_node);
+        Queue.pop();
+        //std::vector<unsigned> avail_int=available_intersections(current, visited_list);  //check the flag
+        std::vector<unsigned> next_seg_vec=available_segs(current, visited_list);
+        unsigned   num_Seg = next_seg_vec.size();   //need to get the available segs form previous line
+        //go through all the segs of the current intersection; insert neighbours in queue
+        for(unsigned i=0; i<num_Seg; i++){
+    
+            unsigned seg_index=next_seg_vec[i]; 
+            unsigned other_end;
+            if(Seg_Info[seg_index].from==current) other_end=Seg_Info[seg_index].to;
+            else other_end=Seg_Info[seg_index].from;
+            double weight=find_street_segment_travel_time(seg_index);  //travel time of seg
+            weight=weight+previous_weight;                              //plus the previous
+            StreetSegmentInfo info1=Seg_Info[seg_index];
+            unsigned n_street_id=info1.streetID;
+            
+           
+            
+            if(current_node.from_segID!=unusedstr){
+                
+                if(Seg_Info[current_node.from_segID].streetID!=n_street_id) weight=weight+turn_penalty;          //add turn penalty
+                
+            }
+            
+            
+            node next_node(other_end,seg_index,current,weight);
+            if(node_list.find(other_end)!=node_list.end()&&node_list[other_end].weight<=next_node.weight){}
+            else {
+                node_list.erase(other_end);node_list.emplace(other_end,next_node);
+                std::pair<double, unsigned> weighted_node(weight, other_end);     //put new node to queue
+                Queue.emplace(weighted_node);
+            
+            }
+            
+            
+            
+            
+            
+    
+        }
+    
+    
+    
+    //prepare for the next loop 
+        if(Queue.empty()){return -1;}
+        else current=((Queue.top()).second); //start with first in queue 
+    while(visited_list.find(current)!=visited_list.end()){
+        Queue.pop();
+        if(Queue.empty()){return -1;}
+        else current=((Queue.top()).second); //start with first in queue 
+    } 
+    
+    }
+    
+    if(std::find(closest_int_to_POI.begin(), closest_int_to_POI.end(), current)!=closest_int_to_POI.end()){
+        
+        std::vector<unsigned> final_path;
+        if (visited_list.size() <= 0){
+            return 0;
+        }
+        //trace back 
+        next_inter=current;
+        return node_list[current].weight;
+        
+    }
+    else return -1;
+}

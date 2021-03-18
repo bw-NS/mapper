@@ -1,0 +1,92 @@
+/*
+ * To change this license header, choose License Headers in Project Properties.
+ * To change this template file, choose Tools | Templates
+ * and open the template in the editor.
+ */
+#include <set>
+
+#include "m1.h"
+#include "m3.h"
+#include "StreetsDatabaseAPI.h"
+extern std::vector<std::vector<unsigned>> intersectionSeg;
+
+
+
+double compute_path_travel_time(const std::vector<unsigned>& path, 
+                                const double turn_penalty){
+    if(path.size()==0) return -1.0;
+    else {
+        double tot_time=0;
+    
+        for(unsigned i=0; i<path.size()-1; i++){
+            unsigned Seg_index1=path[i];
+            unsigned Seg_index2=path[i+1];
+            double time=find_street_segment_travel_time(Seg_index1);
+            
+            tot_time+=time;
+            StreetSegmentInfo temp1=getStreetSegmentInfo(Seg_index1);
+            StreetSegmentInfo temp2=getStreetSegmentInfo(Seg_index2);
+            if(temp1.streetID!=temp2.streetID) tot_time+=turn_penalty;
+        }
+        
+        return tot_time;
+    }
+}
+
+
+
+
+std::vector<unsigned> find_path_between_intersections(const unsigned intersect_id_start, 
+                                                      const unsigned intersect_id_end,
+                                                      const double turn_penalty){
+    
+    // need to deal with no path found!!!!!!!!!!!!
+    std::vector<unsigned> result;
+    if(intersect_id_start==intersect_id_end) return result;
+    else{
+        std::vector<unsigned> adj_int=find_adjacent_intersections(intersect_id_start);
+        // the current examined node 
+        
+        std::set<std::pair<double,unsigned>> Queue;
+        //std::pair<double,unsigned> first(0, intersect_id_start);
+        //Queue.emplace(first);
+        auto itr=Queue.begin();
+
+        unsigned   num_Seg = intersectionSeg[intersect_id_start].size();
+        //go through all the segs of the current itr; insert neighbours in queue
+        for(unsigned i=0; i<num_Seg; i++){
+    
+            unsigned seg_index=intersectionSeg[intersect_id_start][i]; 
+            double weight=find_street_segment_travel_time(seg_index);
+            
+    
+            std::pair<double, unsigned> weighted_node(weight, seg_index);
+            Queue.emplace(weighted_node);
+            
+    
+        }
+        while(1>0){
+            unsigned Int_to;
+            StreetSegmentInfo temp=getStreetSegmentInfo((*itr).second);
+            if(temp.from==intersect_id_start)Int_to=temp.to;
+            else Int_to=temp.from;
+            unsigned street_id=temp.streetID;
+            std::vector<unsigned> shortest_next=find_path_between_intersections( Int_to, intersect_id_end,turn_penalty);
+            double extra_weight=compute_path_travel_time(shortest_next, turn_penalty);
+            std::pair<double, unsigned> copy=(*itr);
+            if(shortest_next.size()==0||street_id==getStreetSegmentInfo(shortest_next[0]).streetID) copy.first=copy.first+extra_weight;
+            else copy.first=copy.first+extra_weight+turn_penalty;
+            Queue.erase(itr);
+            Queue.emplace(copy);
+            if((*Queue.begin()).second==copy.second) {  shortest_next.insert(shortest_next.begin(),copy.second);  return shortest_next;   }
+            
+       
+        }
+    }
+}
+
+
+
+std::vector<unsigned> find_path_to_point_of_interest(const unsigned intersect_id_start, 
+                                               const std::string point_of_interest_name,
+                                               const double turn_penalty){}

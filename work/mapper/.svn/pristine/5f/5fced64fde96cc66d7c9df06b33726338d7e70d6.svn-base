@@ -1,0 +1,79 @@
+/*
+ * To change this license header, choose License Headers in Project Properties.
+ * To change this template file, choose Tools | Templates
+ * and open the template in the editor.
+ */
+
+#include <unittest++/UnitTest++.h>
+#include <set>
+#include <vector>
+#include <algorithm>
+#include "m1.h"
+#include <string>
+#include "unit_test_util.h"
+#include "StreetsDatabaseAPI.h"
+#include <iostream>
+
+TEST(UnitTest_Find_Street_ID) {
+    
+    //Find LIB_STREETMAP_TEST_DIR = libstreetmap/tests/ in Makefile and change it to main/tests
+    
+    //loading map before doing the tests on funcitons
+    load_map("/cad2/ece297s/public/maps/toronto_canada.streets.bin");
+    
+    //the expect value are output from other functions
+    //e.g.  find_intersection_ids_from_street_names
+    std::vector<unsigned> expect = {20281, 224, 5186, 900};    
+    std::string input = "Highway 400 Northbound";    
+    std::vector<unsigned> actual = find_street_ids_from_name(input);
+    //sort both actual output and expected output, so that the element order would be the same
+    //if they are the same
+    std::sort(actual.begin(), actual.end());
+    std::sort(expect.begin(), expect.end());
+    CHECK_EQUAL(expect, actual);
+         
+    
+    expect = {1535, 154, 155, 190, 212, 213, 217, 6855};    
+    input = "Highway 401";    
+    actual = find_street_ids_from_name(input);  
+    std::sort(actual.begin(), actual.end());
+    std::sort(expect.begin(), expect.end());
+    CHECK_EQUAL(expect, actual);
+    
+    
+    expect = {205, 208, 209, 309};    
+    input = "Highway 401 Westbound";    
+    actual = find_street_ids_from_name(input);  
+    std::sort(actual.begin(), actual.end());
+    std::sort(expect.begin(), expect.end());
+    CHECK_EQUAL(expect, actual);
+    
+    expect = {8303};    
+    input = "Biscayne Crescent";    
+    actual = find_street_ids_from_name(input);  
+    std::sort(actual.begin(), actual.end());
+    std::sort(expect.begin(), expect.end());
+    CHECK_EQUAL(expect, actual);
+    
+    
+    
+    expect = {16154, 16160};    
+    input = "Birchwood Drive";    
+    actual = find_street_ids_from_name(input);  
+    std::sort(actual.begin(), actual.end());
+    std::sort(expect.begin(), expect.end());
+    CHECK_EQUAL(expect, actual);
+    
+    
+    {
+        //Timed Test
+        //looping 1000000 times, the expected max time should be 250ms
+        ECE297_TIME_CONSTRAINT(250);
+        std::vector<unsigned> result;
+        for(size_t i = 0; i < 1000000; i++) {
+            result = find_street_ids_from_name("Birchwood Drive");
+        }
+    
+    }
+}
+

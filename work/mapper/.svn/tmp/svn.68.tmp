@@ -1,0 +1,76 @@
+/*
+ * To change this license header, choose License Headers in Project Properties.
+ * To change this template file, choose Tools | Templates
+ * and open the template in the editor.
+ */
+#include "m4_mq.h"
+#include "m3.h"
+#include "iostream"
+
+using namespace std;
+
+std::vector<unsigned> traveling_courier(const std::vector<DeliveryInfo>& deliveries,
+        const std::vector<unsigned>& depots,
+        const float turn_penalty) {
+
+
+    for (unsigned j = 0; j < depots.size(); j++) {
+        std::vector<unsigned> result;
+
+        unsigned start = depots[j];
+        bool flag = true;
+
+        std::vector<unsigned> b = find_path_between_intersections(start, deliveries[0].pickUp, turn_penalty);
+        if (b.size() != 0) result.insert(result.end(), b.begin(), b.end());
+        else {
+            flag = false;
+        }
+
+        DeliveryInfo current = deliveries[0];
+        DeliveryInfo next = deliveries[0];
+
+        if (flag) {
+            for (unsigned i = 0; i < deliveries.size() - 1; i++) {
+                current = deliveries[i];
+                next = deliveries[i + 1];
+
+                b = find_path_between_intersections(current.pickUp, current.dropOff, turn_penalty);
+                if (b.size() != 0) result.insert(result.end(), b.begin(), b.end());
+                else {
+                    flag = false;
+                    break;
+                }
+
+                b = find_path_between_intersections(current.dropOff, next.pickUp, turn_penalty);
+                if (b.size() != 0) result.insert(result.end(), b.begin(), b.end());
+                else {
+                    flag = false;
+                    break;
+                }
+            }
+        }
+
+        if (flag) {
+            b = find_path_between_intersections(next.pickUp, next.dropOff, turn_penalty);
+            if (b.size() != 0) result.insert(result.end(), b.begin(), b.end());
+            else {
+                flag = false;
+            }
+        }
+
+        if (flag) {
+            b = find_path_between_intersections(next.dropOff, start, turn_penalty);
+            if (b.size() != 0) result.insert(result.end(), b.begin(), b.end());
+            else {
+                flag = false;
+            }
+        }
+
+        if (flag) return result;
+        cout << "depot " << j << "fails" << endl;
+    }
+
+    std::vector<unsigned> empty;
+    return empty;
+}
+

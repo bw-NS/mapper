@@ -1,0 +1,266 @@
+/*
+ * To change this license header, choose License Headers in Project Properties.
+ * To change this template file, choose Tools | Templates
+ * and open the template in the editor.
+ */
+
+#include "m4_helper_H.h"
+
+std::vector<unsigned> traveling_courier(const std::vector<DeliveryInfo> &deliveries,
+                                        const std::vector<unsigned> &depots,
+                                        const float turn_penalty)
+{
+    unsigned tempcount = 0;
+    //flags
+    bool segmentValid = true;
+    bool changeValid = false;
+
+    //time&constants
+    double bestTime = -1;
+    double previousTime = -1;
+    double currentTime = -1;
+    double temper = 100;
+    double rate = 0.6;
+    double threshold = 0.5;
+
+    //size
+    unsigned deliveriesNum = deliveries.size();
+    unsigned depotsNum = depots.size();
+
+    //positions
+    unsigned changeCodeFrom;
+    unsigned changeCodeTo;
+    unsigned tempCode;
+    unsigned depotFrom;
+    unsigned depotTo;
+    std::vector<unsigned> pickList;
+    std::vector<unsigned> dropList;
+    std::vector<unsigned> deliverySequence;
+
+    //routines
+    std::vector<unsigned> currentRoutine;
+    std::vector<unsigned> bestRoutine;
+    std::vector<unsigned> previousRoutine;
+    std::vector<unsigned> tempSegment;
+
+    //store all pick positions
+    for (unsigned i = 0; i < deliveriesNum; i++)
+    {
+        pickList.push_back(deliveries[i].pickUp);
+    }
+
+    //store all drop positions
+    for (unsigned i = 0; i < deliveriesNum; i++)
+    {
+        dropList.push_back(deliveries[i].dropOff);
+    }
+
+    //store all delivery information into vector
+    for (unsigned i = 0; i < deliveriesNum; i++)
+    {
+        deliverySequence.push_back(deliveries[i].pickUp);
+    }
+    for (unsigned i = 0; i < deliveriesNum; i++)
+    {
+        deliverySequence.push_back(deliveries[i].dropOff);
+    }
+
+    //function to get an initialized path
+    currentRoutine = calculate_path(depots[0], depots[0], deliverySequence,
+                                    turn_penalty, segmentValid);
+    bestRoutine = currentRoutine;
+    //    for (unsigned i = 0; i <currentRoutine.size(); i++){
+    //        std::cout << currentRoutine[i] << " | ";
+    //    }
+    //    std::cout<< std::endl;
+
+    //calculate initialized time
+    if (bestRoutine.size() != 0)
+        currentTime = compute_path_travel_time(bestRoutine, turn_penalty);
+    bestTime = currentTime;
+    //std::cout << "BTime: " << bestTime << std::endl;
+
+    //start SA
+    while (temper > 1)
+    {
+        while (!changeValid)
+        {
+            changeCodeFrom = unsigned(rand() % deliverySequence.size());
+            changeCodeTo = unsigned(rand() % deliverySequence.size());
+            unsigned temp;
+            if (changeCodeFrom < changeCodeTo)
+            {
+                temp = changeCodeFrom;
+                changeCodeFrom = changeCodeTo;
+                changeCodeTo = temp;
+            }
+            tempcount++;
+            std::cout << tempcount << " || ";
+            changeValid = change_valid(changeCodeFrom, changeCodeTo, pickList, dropList, deliverySequence);
+        }
+        //swap positions
+        tempCode = deliverySequence[changeCodeFrom];
+        deliverySequence[changeCodeFrom] = deliverySequence[changeCodeTo];
+        deliverySequence[changeCodeTo] = tempCode;
+        //        for (unsigned i = 0; i <deliverySequence.size(); i++){
+        //            std::cout << deliverySequence[i] << " | ";
+        //        }
+        //        std::cout<< std::endl;
+
+        //get new depots (start position & end position)
+        depotFrom = unsigned(rand() % depotsNum);
+        depotTo = unsigned(rand() % depotsNum);
+
+        //calculate new routine
+        previousRoutine.clear();
+        previousRoutine = currentRoutine;
+        currentRoutine = calculate_path(depots[depotFrom], depots[depotTo], deliverySequence,
+                                        turn_penalty, segmentValid);
+//                for (unsigned i = 0; i <currentRoutine.size(); i++){
+//                    std::cout << currentRoutine[i] << " | ";
+//                }
+//                std::cout<< std::endl;
+
+        //calculated new time
+        previousTime = currentTime;
+        if (currentRoutine.size() != 0)
+            currentTime = compute_path_travel_time(currentRoutine, turn_penalty);
+        //std::cout << "CTime: " << currentTime << std::endl;
+        if (currentTime != -1)
+        {
+            if ((bestTime == -1) || (bestTime != -1 && bestTime > currentTime))
+            {
+                bestTime = currentTime;
+                bestRoutine.clear();
+                bestRoutine = currentRoutine;
+                //bestRoutine.insert(bestRoutine.end(), deliverySequence.begin(), deliverySequence.end());
+            }
+            else if (previousTime != -1)
+            {
+                if (exp((previousTime - currentTime) / temper) > threshold)
+                {
+                    currentRoutine.clear();
+                    currentRoutine = previousRoutine;
+                }
+            }
+        }
+        temper = temper * rate;
+        changeValid = false;
+        
+        
+        std::cout << temper << " || ";
+        std::cout  << bestTime << std::endl;
+    }
+
+    return bestRoutine;
+}
+
+//check whether pickup is before dropoff
+bool change_valid(unsigned from, unsigned to, std::vector<unsigned> &pickList,
+                  std::vector<unsigned> &dropList, std::vector<unsigned> &deliverySequence)
+{
+    if (from == to)
+        return false;
+    int index = -1;
+    unsigned pickPosition;
+    unsigned dropPosition;
+    unsigned fromPosition = deliverySequence[from];
+    unsigned toPosition = deliverySequence[to];
+    //check whether from is a dropoff position
+    for (unsigned i = 0; i < dropList.size(); i++)
+    {
+        if (dropList[i] == fromPosition)
+            index = i;
+    }
+    //dropoff position found
+    if (index != -1)
+    {
+        pickPosition = pickList[index];
+        if (pickPosition == toPosition)
+            return false;
+        for (unsigned i = 0; i < to; i++)
+        {
+            if (deliverySequence[i] == pickPosition)
+                return false;
+        }
+    }
+    //check pick up
+    index = -1;
+    for (unsigned i = 0; i < pickList.size(); i++)
+    {
+        if (pickList[i] == toPosition)
+            index = i;
+    }
+    if (index != -1)
+    {
+        dropPosition = dropList[index];
+        if (dropPosition == fromPosition)
+            return false;
+        for (unsigned i = 0; i < from; i++)
+        {
+            if (deliverySequence[i] == dropPosition)
+                return false;
+        }
+    }
+    return true;
+}
+
+// bool check_valid(unsigned from, unsigned to, std::vector<unsigned> pickList, std::vector<unsigned> dropList,
+//     const std::vector<DeliveryInfo> &deliveries, std::vector<unsigned> deliverySequence){
+//     std::vector<unsigned> dropPosition;
+//     std::vector<unsigned> pickPosition;
+//     std::vector<unsigned> corDrop;
+//     std::vector<unsigned> corPick;
+//     unsigned fromPosition = deliverySequence[from];
+//     unsigned toPosition = deliverySequence[to];
+//     if (from == to) return false;
+//     for (unsigned i = 0; i < dropList.size(); i++)
+//     {
+//         if (dropList[i] == from)
+//         {
+//             for (unsigned j = 0; j < dropList.size(); j++)
+//             {
+//                 if (deliveries[i].dropOff == )
+//             }
+//         }
+//     }
+// }
+
+//function to calculate path
+std::vector<unsigned> calculate_path(unsigned depotFrom, unsigned depotTo,
+                                     std::vector<unsigned> &deliverySequence, double turn_penalty, bool segmentValid)
+{
+
+    std::vector<unsigned> bestRoutine;
+    std::vector<unsigned> tempSegment = find_path_between_intersections(depotFrom, deliverySequence[0], turn_penalty);
+    if (tempSegment.size() == 0)
+        segmentValid = false;
+    bestRoutine.insert(bestRoutine.end(), tempSegment.begin(), tempSegment.end());
+    if (segmentValid)
+    {
+        for (unsigned i = 1; i < deliverySequence.size(); i++)
+        {
+            tempSegment = find_path_between_intersections(deliverySequence[i - 1], deliverySequence[i], turn_penalty);
+            bestRoutine.insert(bestRoutine.end(), tempSegment.begin(), tempSegment.end());
+            if (tempSegment.size() == 0)
+            {
+                segmentValid = false;
+                break;
+            }
+        }
+        if (segmentValid)
+        {
+            tempSegment = find_path_between_intersections(deliverySequence[deliverySequence.size() - 1], depotTo, turn_penalty);
+            bestRoutine.insert(bestRoutine.end(), tempSegment.begin(), tempSegment.end());
+            if (tempSegment.size() == 0)
+                segmentValid = false;
+        }
+    }
+    //no valid routine found
+    if (!segmentValid)
+    {
+        bestRoutine.clear();
+        segmentValid = true;
+    }
+    return bestRoutine;
+}

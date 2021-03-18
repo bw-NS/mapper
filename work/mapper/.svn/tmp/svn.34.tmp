@@ -1,0 +1,291 @@
+#include "m2.h"
+#include "graphics.h"
+#include <iostream>
+#include "m1.h"
+#include "StreetsDatabaseAPI.h"
+#include <vector>
+#include "unordered_map"
+#include <unordered_set>
+#include <algorithm>
+#include <math.h>
+#include <iostream>
+
+
+//global variables 
+extern std::unordered_map<std::string, std::vector<unsigned>> streetHT;
+extern std::vector<std::vector<unsigned>> intersectionSeg;
+extern std::vector<std::vector<unsigned>> streetSeg;
+extern std::vector<LatLon> positionInt;
+extern std::vector<LatLon> positionPOI;
+extern std::vector<std::unordered_set<unsigned>> streetInt;
+extern int zoom_level;
+extern std::unordered_map<std::string, std::vector<unsigned>> FeaturetypeHT;
+double AvgLat;
+
+//initial boundary from (minlon, minlat) to (maxlon, maxlat)
+t_bound_box bounds(){
+    double minlat=positionInt[0].lat();
+    double maxlat=positionInt[0].lat();
+    double minlon=positionInt[0].lon();
+    double maxlon=positionInt[0].lon();
+    
+    for(unsigned i=1 ; i<positionInt.size(); i++){
+        if(positionInt[i].lat()<minlat) minlat=positionInt[i].lat(); 
+        if(positionInt[i].lat()>maxlat) maxlat=positionInt[i].lat();
+        if(positionInt[i].lon()<minlon) minlon=positionInt[i].lon(); 
+        if(positionInt[i].lon()>maxlon) maxlon=positionInt[i].lon();
+    }
+    for(unsigned p=0;p<positionPOI.size();p++){
+        if(positionPOI[p].lat()<minlat) minlat=positionPOI[p].lat();
+        if(positionPOI[p].lat()>maxlat) maxlat=positionPOI[p].lat();
+        if(positionPOI[p].lon()<minlon) minlon=positionPOI[p].lon(); 
+        if(positionPOI[p].lon()>maxlon) maxlon=positionPOI[p].lon();
+    }
+    AvgLat=(minlat+maxlat)/2;
+    t_bound_box bound(minlon*cos(AvgLat), minlat, maxlon*cos(AvgLat),maxlat);
+    
+    return bound;
+}
+
+
+//reaction functions to mouse and keyboard
+void act_on_button_press(float x, float y, t_event_buttonPressed event){}
+void act_on_mouse_move(float x, float y){}
+void act_on_key_press(char c, int keysym){}
+
+//functions used in draw screen 
+void drawRoad();
+void drawPOI();
+void drawFeature();
+void drawIntersect();
+void drawNames();
+
+
+void drawscreen(){
+    clearscreen();
+    //std::cout<<zoom_level;
+    drawFeature();
+    drawRoad();
+    drawIntersect();
+    drawPOI();
+    drawNames();
+}
+void draw_map(){
+    t_color background(232,232,232);
+    init_graphics("City map", background);
+    t_bound_box bound=bounds();
+    set_visible_world(bound);
+    set_keypress_input(true);
+    set_mouse_move_input(true);
+    event_loop(act_on_button_press, act_on_mouse_move, act_on_key_press, drawscreen);
+    close_graphics();
+}
+
+
+//--------------------------------------------------------------------drawing functions---------------------------------------------------------------------------
+
+void drawRoad(){
+    t_bound_box currentWorld=get_visible_world();
+    t_color road_color(255,250,250);
+    setcolor(road_color);
+    for(unsigned i=0; i<streetSeg.size(); i++){
+        for(unsigned j=0; j<streetSeg[i].size();j++){
+            StreetSegmentInfo temp=getStreetSegmentInfo(streetSeg[i][j]); 
+            double xf=positionInt[temp.from].lon()*cos(AvgLat);
+            double yf=positionInt[temp.from].lat();
+            
+            double xt=positionInt[temp.to].lon()*cos(AvgLat);
+            double yt=positionInt[temp.to].lat();
+            
+            if((currentWorld.intersects(xf,yf)||currentWorld.intersects(xt,yt))){
+                
+                 if(temp.speedLimit>=50){setlinewidth(2);setcolor(WHITE);drawline(xf,yf,xt,yt);}
+                 else {setlinewidth(0);setcolor(WHITE);if(zoom_level>=3)drawline(xf,yf,xt,yt);}
+            }
+        }
+              
+    }
+}
+
+
+//--------------------------drawing Features & help functions-------------------------
+//function to draw open features 
+void openFeature(unsigned i){
+    int number_of_point=getFeaturePointCount(i);
+    
+    if(getFeatureType(i)==Park||getFeatureType(i)==Island||getFeatureType(i)==Greenspace||getFeatureType(i)==Golfcourse) setcolor(200,238,185);
+    else if(getFeatureType(i)==Unknown||getFeatureType(i)==Beach||getFeatureType(i)==Building) setcolor(253,245,226);
+    else setcolor(170,218,255);
+    for(int j=0; j<number_of_point-1;j++){
+        LatLon from=getFeaturePoint(i, j);
+        LatLon to=getFeaturePoint(i, j+1);
+        drawline(from.lon()*cos(AvgLat),from.lat(),to.lon()*cos(AvgLat),to.lat());
+    }
+}
+
+
+//function to draw close features 
+void closeFeature(unsigned i){
+    int number_of_point=getFeaturePointCount(i);
+    if(getFeatureType(i)==Park||getFeatureType(i)==Island||getFeatureType(i)==Greenspace||getFeatureType(i)==Golfcourse) setcolor(200,238,185);
+    else if(getFeatureType(i)==Unknown||getFeatureType(i)==Beach||getFeatureType(i)==Building) setcolor(253,245,226);
+    else setcolor(170,218,255);
+    t_point latlonArray[number_of_point];
+    for(int j=0; j<number_of_point;j++){
+        LatLon temp=getFeaturePoint(i, j);
+        t_point points(temp.lon()*cos(AvgLat),temp.lat());
+        latlonArray[j]= points;
+        }
+    fillpoly(latlonArray,number_of_point );
+}
+//function to judge if a feature is closed
+bool Feature_close(unsigned FeatureID){
+    bool close=false;
+    LatLon Start, End;
+    int number_of_point=getFeaturePointCount(FeatureID);
+    Start=getFeaturePoint(FeatureID ,0);
+    End=getFeaturePoint(FeatureID ,number_of_point-1);
+    if(Start.lat()==End.lat()&&Start.lon()==End.lon()) close=true;
+    return close;
+}
+
+void drawFeature(){
+    t_bound_box currentWorld=get_visible_world();
+    std::vector<unsigned> Green=FeaturetypeHT["Green"];
+    std::vector<unsigned> Yellow=FeaturetypeHT["Yellow"];
+    std::vector<unsigned> Blue=FeaturetypeHT["Blue"];
+    for(unsigned i=0; i<Green.size();i++){
+        
+        int number_of_point=getFeaturePointCount(Green[i]);
+        bool draw=false;
+        for(int j=0; j<number_of_point&&!draw; j++){
+            LatLon temp=getFeaturePoint(Green[i], j);
+            if(currentWorld.intersects(temp.lon()*cos(AvgLat), temp.lat())) draw=true;
+        }
+        if(draw) {
+            if(Feature_close(Green[i])) closeFeature(Green[i]);
+            else openFeature(Green[i]);
+        }
+    }
+    for(unsigned i=0; i<Yellow.size();i++){
+        
+        int number_of_point=getFeaturePointCount(Yellow[i]);
+        bool draw=false;
+        for(int j=0; j<number_of_point&&!draw; j++){
+            LatLon temp=getFeaturePoint(Yellow[i], j);
+            if(currentWorld.intersects(temp.lon()*cos(AvgLat), temp.lat())) draw=true;
+        }
+        if(draw) {
+            if(Feature_close(Yellow[i])) closeFeature(Yellow[i]);
+            else openFeature(Yellow[i]);
+        }
+    }
+    for(unsigned i=0; i<Blue.size();i++){
+        
+        int number_of_point=getFeaturePointCount(Blue[i]);
+        bool draw=false;
+        for(int j=0; j<number_of_point&&!draw; j++){
+            LatLon temp=getFeaturePoint(Blue[i], j);
+            if(currentWorld.intersects(temp.lon()*cos(AvgLat), temp.lat())) draw=true;
+        }
+        if(draw) {
+            if(Feature_close(Blue[i])) closeFeature(Blue[i]);
+            else openFeature(Blue[i]);
+        }
+    }
+    
+}
+
+//-------------------------------intersection & POI------------------------------
+void drawIntersect(){
+    t_bound_box currentWorld=get_visible_world();
+    for(unsigned i=0; i<positionInt.size();i++){
+        LatLon temp=positionInt[i];
+        setcolor(RED);
+        if(currentWorld.intersects(temp.lon()*cos(AvgLat),temp.lat())) fillarc(temp.lon()*cos(AvgLat),temp.lat(),0.00003,0, 360);
+    }
+}
+
+void drawPOI(){    
+    t_bound_box currentWorld=get_visible_world();
+    for(unsigned i=0; i<positionPOI.size();i++){
+        LatLon temp=positionPOI[i];
+        setcolor(ORANGE);
+        if(currentWorld.intersects(temp.lon()*cos(AvgLat),temp.lat())) fillarc(temp.lon()*cos(AvgLat),temp.lat(),0.0001,0, 360);
+    }
+}
+
+//--------------------------name---------------------------------
+void   drawStreetNames();
+void   drawFeatureNames();
+void   drawPOINames();
+
+void drawNames(){
+    drawStreetNames();
+    drawFeatureNames();
+    drawPOINames();
+}
+
+void   drawStreetNames(){}
+
+t_point find_center(unsigned i);
+ 
+void   drawFeatureNames(){
+    t_bound_box currentWorld=get_visible_world();
+    setcolor(BLACK);
+    
+    for(unsigned i=0; i<getNumberOfFeatures(); i++){
+        bool draw=false;
+        if(getFeatureName(i)=="<noname>");
+        else {
+            for(unsigned j=0; j<getFeaturePointCount(i)&&!draw;j++){
+                LatLon temp=getFeaturePoint(i, j);
+                if(currentWorld.intersects(temp.lon()*cos(AvgLat), temp.lat())) draw=true;
+            } 
+        if(draw){
+            if(Feature_close(i)&&zoom_level>=3){
+                setfontsize(10);
+                t_point center=find_center(i);
+                drawtext(center, getFeatureName(i), 0.01, 0.01); 
+
+            }
+            else if(!Feature_close(i)&&zoom_level>=8){
+                for(unsigned j=0; j<getFeaturePointCount(i)-1;j++){
+                    LatLon from=getFeaturePoint(i, j);
+                    LatLon to=getFeaturePoint(i, j+1);
+                    t_point center((from.lon()*cos(AvgLat)+to.lon())/2, (from.lat()*cos(AvgLat)+to.lat())/2);
+                    setfontsize(3);
+                    drawtext(center, getFeatureName(i), 0.01, 0.01);
+            } 
+            }
+        }
+        }
+    }
+}
+
+t_point find_center(unsigned i){
+    unsigned numOfPoints=getFeaturePointCount(i);
+    double x=0.0, y=0.0;
+    for(unsigned j=0; j<numOfPoints; j++){
+        LatLon temp=getFeaturePoint(i,j);
+        x+=temp.lon()*cos(AvgLat);
+        y+=temp.lat();
+    }
+    t_point center(x/numOfPoints,y/numOfPoints );
+    return center;
+}
+ 
+ void   drawPOINames(){
+    t_bound_box currentWorld=get_visible_world();
+    setcolor(BLACK);
+    setfontsize(8);
+    if(zoom_level>=7) 
+        for(unsigned i=0; i<positionPOI.size(); i++){
+            LatLon temp=positionPOI[i];
+            if(currentWorld.intersects(temp.lon()*cos(AvgLat), temp.lat())){
+                std::string POIname=getPointOfInterestName(i);
+                
+                drawtext(temp.lon()*cos(AvgLat), temp.lat(), POIname, 0.01, 0.01);
+            }
+         }
+ }

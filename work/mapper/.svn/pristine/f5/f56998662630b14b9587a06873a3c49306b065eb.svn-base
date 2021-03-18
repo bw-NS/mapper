@@ -1,0 +1,124 @@
+/* 
+ * Copyright 2018 University of Toronto
+ *
+ * Permission is hereby granted, to use this software and associated 
+ * documentation files (the "Software") in course work at the University 
+ * of Toronto, or for personal use. Other uses are prohibited, in 
+ * particular the distribution of the Software either publicly or to third 
+ * parties.
+ *
+ * The above copyright notice and this permission notice shall be included in 
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR 
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, 
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE 
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER 
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ */
+#include <iostream>
+#include <string>
+
+#include "m1.h"
+#include "m2.h"
+#include "m3.h"
+#include "StreetsDatabaseAPI.h"
+#include "unordered_map"
+//Program exit codes
+constexpr int SUCCESS_EXIT_CODE = 0;        //Everyting went OK
+constexpr int ERROR_EXIT_CODE = 1;          //An error occured
+constexpr int BAD_ARGUMENTS_EXIT_CODE = 2;  //Invalid command-line usage
+
+extern std::vector<LatLon> positionInt;
+extern std::vector<std::vector<unsigned>> intersectionSeg;
+
+//The default map to load if none is specified
+std::string default_map_path = "/cad2/ece297s/public/maps/toronto_canada.streets.bin";
+
+int main(int argc, char** argv) {
+
+    std::string map_path;
+    if(argc == 1) {
+        //Use a default map
+        map_path = default_map_path;
+    } else if (argc == 2) {
+        //Get the map from the command line
+        map_path = argv[1];
+    } else {
+        //Invalid arguments
+        std::cerr << "Usage: " << argv[0] << " [map_file_path]\n";
+        std::cerr << "  If no map_file_path is provided a default map is loaded.\n";
+        return BAD_ARGUMENTS_EXIT_CODE;
+    }
+   
+    //Load the map and related data structures
+   bool load_success = load_map(map_path);
+   if(!load_success) {
+        std::cerr << "Failed to load map '" << map_path << "'\n";
+       return ERROR_EXIT_CODE;
+    }
+
+    std::cout << "Successfully loaded map '" << map_path << "'\n";
+double actual;
+    //You can now do something with the map data
+std::vector<unsigned> path;
+        
+        //std::cout<<getStreetSegmentInfo(78).from<<std::endl;
+       //std::cout<<getStreetSegmentInfo(78).oneWay<<std::endl;
+       //std::cout<<getStreetSegmentInfo(78).to<<std::endl;
+        //path = find_path_to_point_of_interest(1098, "Bödeli Bibliothek", 15.00000000000000000);
+        path = find_path_between_intersections(98520, 98456, 15.00000000000000000);
+        //path = find_path_to_point_of_interest(34501, "Retro Burger", 15.00000000000000000);
+ for(int i=0; i<path.size();i++){
+    std::cout<<path[i]<<std::endl;
+    //std::cout<<getStreetSegmentInfo(path[i]).from<<std::endl;
+    //std::cout<<getStreetSegmentInfo(path[i]).oneWay<<std::endl;
+    //std::cout<<getStreetSegmentInfo(path[i]).to<<std::endl;
+ }
+      
+        std::cout<<compute_path_travel_time(path, 
+                                 15.0000000000000000)<<std::endl;
+        
+        std::vector<unsigned> path2={133012,132981,132994,132995,132996,132997,132998,132989,132964,132948,132967,132968,132958,132965
+        ,132966,132969,132924,148463,132919,132917,148456,132935,148457,148458,132922,132918,132943,132944,124892,124914,124908,124909,
+        132858,132859};
+        for(int i=0; i<path2.size();i++){
+            //std::cout<<path2[i]<<std::endl;
+            std::cout<<getStreetSegmentInfo(path2[i]).from<<std::endl;
+            std::cout<<getStreetSegmentInfo(path2[i]).oneWay<<std::endl;
+            std::cout<<getStreetSegmentInfo(path2[i]).to<<std::endl;
+        }
+        
+        std::cout<<compute_path_travel_time(path2, 
+                                 15.0000000000000000)<<std::endl;
+        
+        std::vector<unsigned> path3={133012,132981,132994};
+        std::cout<<compute_path_travel_time(path3, 
+                                 15.0000000000000000)<<std::endl;
+        std::unordered_map<unsigned, unsigned> a;
+        a.emplace(1,1);
+        a.emplace(1,2);
+        
+        //for(int i=0; i<intersectionSeg[98523].size();i++)
+        //std::cout<<intersectionSeg[98523][i]<<std::endl;
+       
+       std::cout<<getStreetSegmentInfo(132919).from<<std::endl;
+       std::cout<<getStreetSegmentInfo(132919).oneWay<<std::endl;
+       std::cout<<getStreetSegmentInfo(132919).to<<std::endl;
+       std::cout<<positionInt[98485].lat()<<std::endl;
+       std::cout<<positionInt[98485].lon()<<std::endl;
+       std::cout<<positionInt[98481].lat()<<std::endl;
+       std::cout<<positionInt[98481].lon()<<std::endl;
+       std::cout<<find_street_segment_travel_time(132919);
+       //std::cout<<getStreetSegmentInfo(1575).speedLimit<<std::endl;
+         //std::cout<<find_street_segment_length(373)<<std::endl;
+         //std::cout<<getStreetSegmentInfo(373).speedLimit<<std::endl;
+         //std::cout<<getStreetSegmentInfo( 373).curvePointCount<<std::endl;
+    //Clean-up the map data and related data structures
+    std::cout << "Closing map\n";
+    close_map(); 
+
+    return SUCCESS_EXIT_CODE;
+}

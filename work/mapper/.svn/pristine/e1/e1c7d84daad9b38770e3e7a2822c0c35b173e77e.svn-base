@@ -1,0 +1,21 @@
+/*
+ * To change this license header, choose License Headers in Project Properties.
+ * To change this template file, choose Tools | Templates
+ * and open the template in the editor.
+ */
+
+/* 
+ * File:   m3_function_declaration.h
+ * Author: haojinze
+ *
+ * Created on March 19, 2018, 12:59 AM
+ */
+
+#ifndef M3_FUNCTION_DECLARATION_H
+#define M3_FUNCTION_DECLARATION_H
+
+std::vector<unsigned> available_intersections(unsigned current_int, const std::vector<unsigned>& visited_list);
+std::vector<unsigned> get_available_seg_id(unsigned current, std::vector<unsigned>& avail_int);
+
+#endif /* M3_FUNCTION_DECLARATION_H */
+

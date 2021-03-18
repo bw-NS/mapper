@@ -1,0 +1,88 @@
+#include "m2.h"
+#include "graphics.h"
+#include <iostream>
+#include "m1.h"
+#include "StreetsDatabaseAPI.h"
+#include <vector>
+#include "unordered_map"
+#include <unordered_set>
+#include <algorithm>
+#include <math.h>
+#include <iostream>
+
+extern std::unordered_map<std::string, std::vector<unsigned>> streetHT;
+extern std::vector<std::vector<unsigned>> intersectionSeg;
+extern std::vector<std::vector<unsigned>> streetSeg;
+extern std::vector<LatLon> positionInt;
+extern std::vector<LatLon> positionPOI;
+extern std::vector<std::unordered_set<unsigned>> streetInt;
+
+
+
+t_bound_box bounds(){
+    double minlat=positionInt[0].lat;
+    double maxlat=positionInt[0].lat;
+    double minlon=positionInt[0].lon;
+    double maxlon=positionInt[0].lon;
+    
+    for(int i=1 ; i<positionInt.size(); i++){
+        if(positionInt[i].lat<minlat) minlat=positionInt[i].lat; 
+        if(positionInt[i].lat>maxlat) maxlat=positionInt[i].lat;
+        if(positionInt[i].lon<minlon) minlon=positionInt[i].lon; 
+        if(positionInt[i].lon>maxlon) maxlon=positionInt[i].lon;
+    }
+    for(int p=0;p<positionPOI.size();p++){
+        if(positionPOI[p].lat<minlat) minlat=positionPOI[p].lat;
+        if(positionPOI[p].lat>maxlat) maxlat=positionPOI[p].lat;
+        if(positionPOI[p].lon<minlon) minlon=positionPOI[p].lon; 
+        if(positionPOI[p].lon>maxlon) maxlon=positionPOI[p].lon;
+    }
+    t_bound_box bound(minlat, minlon,maxlat,maxlon);
+    
+    return bound;
+}
+
+
+void draw_map(){
+    t_color background(220,220,220);
+    init_graphics("City map", background);
+    t_bound_box bound=bounds();
+    set_visible_world(bound);
+    set_keypress_input(true);
+    set_mouse_move_input(true);
+    event_loop(act_on_button_press, act_on_mouse_move, act_on_key_press, drawscreen);
+    close_graphics();
+}
+
+void act_on_button_press();
+void act_on_mouse_move();
+void act_on_key_press();
+void drawRoad();
+void drawPOI();
+void drawFeature();
+void drawscreen(){
+    clearscreen();
+    drawRoad();
+    drawPOI();
+    drawFeature();
+}
+
+void drawRoad(){
+    t_bound_box currentWorld=get_visible_world();
+    t_color road_color(255,250,250);
+    setcolor(road_color);
+    for(int i=0; i<streetSeg.size(); i++){
+        for(int j=0; j<streetSeg[i].size();j++){
+            StreetSegmentInfo temp=getStreetSegmentInfo(streetSeg[i][j]); 
+            double xf=positionInt[temp.from].lat;
+            double yf=positionInt[temp.from].lon;
+            double xt=positionInt[temp.to].lat;
+            double yt=positionInt[temp.to].lon;
+            
+            setlinewidth(0);
+            if(currentWorld.intersects(xf,yf)||currentWorld.intersects(xt,yt))
+                drawline(xf,yf,xt,yt);
+        }
+              
+    }
+}

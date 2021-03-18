@@ -1,0 +1,408 @@
+#include "m2.h"
+#include "graphics.h"
+#include <iostream>
+#include "m1.h"
+#include "StreetsDatabaseAPI.h"
+#include <vector>
+#include "unordered_map"
+#include <unordered_set>
+#include <algorithm>
+#include <math.h>
+#include <iostream>
+#include "OSMEntity.h"
+#include "OSMNode.h"
+#include "OSMWay.h"
+#include "OSMRelation.h"
+#include "OSMDatabaseAPI.h"
+#include "loadfromOSM.h"
+
+
+bool loadmap(){
+    bool load_success=false;
+    std::string city_name; 
+    std::cout<<"City name in lower case: "<<std::endl;
+    getline(std::cin,city_name);
+    
+        if(city_name=="beijing" ) load_success=load_map("/cad2/ece297s/public/maps/beijing_china.streets.bin");
+        else if(city_name=="cairo")  load_success=load_map("/cad2/ece297s/public/maps/cairo_egypt.streets.bin");
+        else if(city_name=="cape-town") load_success=load_map("/cad2/ece297s/public/maps/cape-town_south-africa.streets.bin");
+        else if(city_name=="golden-horseshoe")  load_success=load_map("/cad2/ece297s/public/maps/golden-horseshoe_canada.streets.bin");
+        else if(city_name=="hamilton")  load_success=load_map("/cad2/ece297s/public/maps/hamilton_canada.streets.bin");
+        else if(city_name=="hong-kong")  load_success=load_map("/cad2/ece297s/public/maps/hong-kong_china.streets.bin");
+        else if(city_name=="iceland")  load_success=load_map("/cad2/ece297s/public/maps/iceland.streets.bin");
+        else if(city_name=="interlaken")  load_success=load_map("/cad2/ece297s/public/maps/interlaken_switzerland.streets.bin");
+        else if(city_name=="london") load_success=load_map("/cad2/ece297s/public/maps/london_england.streets.bin");
+        else if(city_name=="moscow")  load_success=load_map("/cad2/ece297s/public/maps/moscow_russia.streets.bin");
+        else if(city_name=="new-delhi")  load_success=load_map("/cad2/ece297s/public/maps/new-delhi_india.streets.bin");
+        else if(city_name=="new-york") load_success=load_map("/cad2/ece297s/public/maps/new-york_usa.streets.bin");
+        else if(city_name=="rio-de-janeiro") load_success=load_map("/cad2/ece297s/public/maps/rio-de-janeiro_brazil.streets.bin");
+        else if(city_name=="saint-helena")  load_success=load_map("/cad2/ece297s/public/maps/saint-helena.streets.bin");
+        else if(city_name=="singapore")  load_success=load_map("/cad2/ece297s/public/maps/singapore.streets.bin");
+        else if(city_name=="sydney") load_success=load_map("/cad2/ece297s/public/maps/sydney_australia.streets.bin");
+        else if(city_name=="tehran")  load_success=load_map("/cad2/ece297s/public/maps/tehran_iran.streets.bin");
+        else if(city_name=="tokyo")  load_success=load_map("/cad2/ece297s/public/maps/tokyo_japan.streets.bin");
+        else if(city_name=="toronto")  load_success=load_map("/cad2/ece297s/public/maps/toronto_canada.streets.bin");
+        
+    
+    return load_success;
+    
+}
+
+
+
+
+//global variables 
+extern std::unordered_map<std::string, std::vector<unsigned>> streetHT;
+extern std::vector<std::vector<unsigned>> intersectionSeg;
+extern std::vector<std::vector<unsigned>> streetSeg;
+extern std::vector<LatLon> positionInt;
+extern std::vector<LatLon> positionPOI;
+extern std::vector<std::unordered_set<unsigned>> streetInt;
+extern int zoom_level;
+extern std::unordered_map<std::string, std::vector<unsigned>> FeaturetypeHT;
+extern std::vector<std::pair<std::string,std::string>> highway_tags;
+double AvgLat;
+
+//initial boundary from (minlon, minlat) to (maxlon, maxlat)
+t_bound_box bounds(){
+    double minlat=positionInt[0].lat();
+    double maxlat=positionInt[0].lat();
+    double minlon=positionInt[0].lon();
+    double maxlon=positionInt[0].lon();
+    
+    for(unsigned i=1 ; i<positionInt.size(); i++){
+        if(positionInt[i].lat()<minlat) minlat=positionInt[i].lat(); 
+        if(positionInt[i].lat()>maxlat) maxlat=positionInt[i].lat();
+        if(positionInt[i].lon()<minlon) minlon=positionInt[i].lon(); 
+        if(positionInt[i].lon()>maxlon) maxlon=positionInt[i].lon();
+    }
+    for(unsigned p=0;p<positionPOI.size();p++){
+        if(positionPOI[p].lat()<minlat) minlat=positionPOI[p].lat();
+        if(positionPOI[p].lat()>maxlat) maxlat=positionPOI[p].lat();
+        if(positionPOI[p].lon()<minlon) minlon=positionPOI[p].lon(); 
+        if(positionPOI[p].lon()>maxlon) maxlon=positionPOI[p].lon();
+    }
+    AvgLat=(minlat+maxlat)/2;
+    t_bound_box bound(minlon*cos(AvgLat), minlat, maxlon*cos(AvgLat),maxlat);
+    
+    return bound;
+}
+
+
+//reaction functions to mouse and keyboard
+void act_on_button_press(float x, float y, t_event_buttonPressed event){}
+void act_on_mouse_move(float x, float y){}
+void act_on_key_press(char c, int keysym){}
+
+//functions used in draw screen 
+void drawRoad();
+void drawPOI();
+void drawFeature();
+void drawIntersect();
+void drawNames();
+
+
+/*
+void draw_search_bar(){
+    float sb_width = (bounds().get_width() - 5) / 2;
+    float sb_height = bounds().right() / 10;
+    t_point sb1_bottom_left;
+    sb1_bottom_left.x = bounds().left() + 1.5;
+    sb1_bottom_left.y = bounds().top() + 1.5 + sb_height;
+    t_point sb1_upper_right;
+    sb1_upper_right.x = sb1_bottom_left.x + sb_width;
+    sb1_upper_right.y = bounds().top() + 1.5;
+    t_point sb2_bottom_left;
+    sb2_bottom_left.x = bounds().bottom_left().x + 3.5 + sb_width;
+    sb2_bottom_left.y = bounds().top() + 1.5 + sb_height;
+    t_point sb2_upper_right;
+    sb2_upper_right.x = sb2_bottom_left.x + sb_width;
+    sb2_upper_right.y = bounds().top() + 1.5;
+    bool sb1_valid_to_input, sb2_valid_to_input;
+    bool one_valid = true;
+    char input_char;
+    std::vector<char> input1, input2;
+    
+    //draw rec
+    drawrect(sb1_bottom_left, sb1_upper_right);
+    drawrect(sb2_bottom_left, sb2_upper_right);
+    while (one_valid) {
+    //NEED:::::::identify if the mouse is pressed in the range
+    if ( )    sb1_valid_to_input = true;
+    else sb1_valid_to_input = false;
+    if ( )    sb2_valid_to_input = true;
+    else sb2_valid_to_input = false;
+    //identify if the input is valid and put it in the loop
+    if (sb1_valid_to_input == true) {
+        //NEED:::::input the key press
+        input1.push_back(input_char)
+        //NEED::::::how to related display
+    }
+    if (sb2_valid_to_input == true) {
+        //NEED:::::input the key press
+        input2.push_back(input_char)
+        //NEED::::::how to related display
+    }
+    if (sb1_valid_to_input == false && sb2_valid_to_input == false)
+        one_valid = false;
+    }
+    //NEED::::identify if the mouse click the "find" button
+    //doing the search
+    //NEED:::::convert vector into string
+    int intersection_id;
+    intersection_id = find_intersection_ids_from_street_names(input1, input2);
+    //NEED:::::highlight    
+}
+*/
+void drawscreen(){
+    clearscreen();
+    //std::cout<<zoom_level;
+    drawFeature();
+    drawRoad();
+    drawIntersect();
+    drawPOI();
+    drawNames();
+}
+void draw_map(){
+    bool load_success = loadmap();
+    if(!load_success) {std::cout<<"Load map failed."<<std::endl; return; }
+    t_color background(232,232,232);
+    init_graphics("City map", background);
+    t_bound_box bound=bounds();
+    set_visible_world(bound);
+    set_keypress_input(true);
+    set_mouse_move_input(true);
+    event_loop(act_on_button_press, act_on_mouse_move, act_on_key_press, drawscreen);
+    close_graphics();
+}
+
+
+//--------------------------------------------------------------------drawing functions---------------------------------------------------------------------------
+
+void drawRoad(){
+    t_bound_box currentWorld=get_visible_world();
+    t_color road_color(255,250,250);
+    setcolor(road_color);
+    for(unsigned i=0; i<streetSeg.size(); i++){
+        for(unsigned j=0; j<streetSeg[i].size();j++){
+            StreetSegmentInfo temp=getStreetSegmentInfo(streetSeg[i][j]); 
+            double xf=positionInt[temp.from].lon()*cos(AvgLat);
+            double yf=positionInt[temp.from].lat();
+            
+            double xt=positionInt[temp.to].lon()*cos(AvgLat);
+            double yt=positionInt[temp.to].lat();
+            
+            if((currentWorld.intersects(xf,yf)||currentWorld.intersects(xt,yt))){
+                
+                 if(temp.speedLimit>=50){setlinewidth(2);setcolor(WHITE);drawline(xf,yf,xt,yt);}
+                 else {setlinewidth(0);setcolor(WHITE);if(zoom_level>=3)drawline(xf,yf,xt,yt);}
+            }
+        }
+              
+    }
+}
+
+
+//--------------------------drawing Features & help functions-------------------------
+//function to draw open features 
+void openFeature(unsigned i){
+    int number_of_point=getFeaturePointCount(i);
+    
+    
+    for(int j=0; j<number_of_point-1;j++){
+        LatLon from=getFeaturePoint(i, j);
+        LatLon to=getFeaturePoint(i, j+1);
+        drawline(from.lon()*cos(AvgLat),from.lat(),to.lon()*cos(AvgLat),to.lat());
+    }
+}
+
+
+//function to draw close features 
+void closeFeature(unsigned i){
+    int number_of_point=getFeaturePointCount(i);
+    
+    t_point latlonArray[number_of_point];
+    for(int j=0; j<number_of_point;j++){
+        LatLon temp=getFeaturePoint(i, j);
+        t_point points(temp.lon()*cos(AvgLat),temp.lat());
+        latlonArray[j]= points;
+        }
+    fillpoly(latlonArray,number_of_point );
+}
+//function to judge if a feature is closed
+bool Feature_close(unsigned FeatureID){
+    bool close=false;
+    LatLon Start, End;
+    int number_of_point=getFeaturePointCount(FeatureID);
+    Start=getFeaturePoint(FeatureID ,0);
+    End=getFeaturePoint(FeatureID ,number_of_point-1);
+    if(Start.lat()==End.lat()&&Start.lon()==End.lon()) close=true;
+    return close;
+}
+
+void drawFeature(){
+    t_bound_box currentWorld=get_visible_world();
+    std::vector<unsigned> Green=FeaturetypeHT["Green"];
+    std::vector<unsigned> Yellow=FeaturetypeHT["Yellow"];
+    std::vector<unsigned> Blue=FeaturetypeHT["Blue"];
+    std::vector<unsigned> island=FeaturetypeHT["island"];
+    
+    setcolor(200,238,185);
+    for(unsigned i=0; i<Green.size();i++){
+        
+        int number_of_point=getFeaturePointCount(Green[i]);
+        bool draw=false;
+        for(int j=0; j<number_of_point&&!draw; j++){
+            LatLon temp=getFeaturePoint(Green[i], j);
+            if(currentWorld.intersects(temp.lon()*cos(AvgLat), temp.lat())) draw=true;
+        }
+        if(draw) {
+            if(Feature_close(Green[i])) closeFeature(Green[i]);
+            else openFeature(Green[i]);
+        }
+    }
+    setcolor(253,245,226);
+    for(unsigned i=0; i<Yellow.size();i++){
+        
+        int number_of_point=getFeaturePointCount(Yellow[i]);
+        bool draw=false;
+        for(int j=0; j<number_of_point&&!draw; j++){
+            LatLon temp=getFeaturePoint(Yellow[i], j);
+            if(currentWorld.intersects(temp.lon()*cos(AvgLat), temp.lat())) draw=true;
+        }
+        if(draw) {
+            if(Feature_close(Yellow[i])) closeFeature(Yellow[i]);
+            else openFeature(Yellow[i]);
+        }
+    }
+    setcolor(170,218,255);
+    for(unsigned i=0; i<Blue.size();i++){
+        
+        int number_of_point=getFeaturePointCount(Blue[i]);
+        bool draw=false;
+        for(int j=0; j<number_of_point&&!draw; j++){
+            LatLon temp=getFeaturePoint(Blue[i], j);
+            if(currentWorld.intersects(temp.lon()*cos(AvgLat), temp.lat())) draw=true;
+        }
+        if(draw) {
+            if(Feature_close(Blue[i])) closeFeature(Blue[i]);
+            else openFeature(Blue[i]);
+        }
+    }
+    setcolor(200,238,185);
+    for(unsigned i=0; i<island.size();i++){
+        
+        int number_of_point=getFeaturePointCount(island[i]);
+        bool draw=false;
+        for(int j=0; j<number_of_point&&!draw; j++){
+            LatLon temp=getFeaturePoint(island[i], j);
+            if(currentWorld.intersects(temp.lon()*cos(AvgLat), temp.lat())) draw=true;
+        }
+        if(draw) {
+            if(Feature_close(island[i])) closeFeature(island[i]);
+            else openFeature(island[i]);
+        }
+    }
+    
+    
+}
+
+//-------------------------------intersection & POI------------------------------
+void drawIntersect(){
+    t_bound_box currentWorld=get_visible_world();
+    for(unsigned i=0; i<positionInt.size();i++){
+        LatLon temp=positionInt[i];
+        setcolor(RED);
+        double radius=0.00003;
+        if(currentWorld.intersects(temp.lon()*cos(AvgLat),temp.lat())) {
+            if(zoom_level<=5||zoom_level>3)fillarc(temp.lon()*cos(AvgLat),temp.lat(),radius*0.5,0, 360);
+            else
+            fillarc(temp.lon()*cos(AvgLat),temp.lat(),radius,0, 360);
+        
+        }
+    }
+}
+
+void drawPOI(){    
+    t_bound_box currentWorld=get_visible_world();
+    for(unsigned i=0; i<positionPOI.size();i++){
+        LatLon temp=positionPOI[i];
+        setcolor(ORANGE);
+        if(currentWorld.intersects(temp.lon()*cos(AvgLat),temp.lat())) fillarc(temp.lon()*cos(AvgLat),temp.lat(),0.0001,0, 360);
+    }
+}
+
+//--------------------------name---------------------------------
+void   drawStreetNames();
+void   drawFeatureNames();
+void   drawPOINames();
+
+void drawNames(){
+    drawStreetNames();
+    drawFeatureNames();
+    drawPOINames();
+}
+
+void   drawStreetNames(){}
+
+t_point find_center(unsigned i);
+ 
+void   drawFeatureNames(){
+    t_bound_box currentWorld=get_visible_world();
+    setcolor(BLACK);
+    
+    for(unsigned i=0; i<getNumberOfFeatures(); i++){
+        bool draw=false;
+        if(getFeatureName(i)=="<noname>");
+        else {
+            for(unsigned j=0; j<getFeaturePointCount(i)&&!draw;j++){
+                LatLon temp=getFeaturePoint(i, j);
+                if(currentWorld.intersects(temp.lon()*cos(AvgLat), temp.lat())) draw=true;
+            } 
+        if(draw){
+            if(Feature_close(i)&&zoom_level>=3){
+                setfontsize(10);
+                t_point center=find_center(i);
+                drawtext(center, getFeatureName(i), 0.01, 0.01); 
+
+            }
+            else if(!Feature_close(i)&&zoom_level>=8){
+                for(unsigned j=0; j<getFeaturePointCount(i)-1;j++){
+                    LatLon from=getFeaturePoint(i, j);
+                    LatLon to=getFeaturePoint(i, j+1);
+                    t_point center((from.lon()*cos(AvgLat)+to.lon())/2, (from.lat()*cos(AvgLat)+to.lat())/2);
+                    setfontsize(3);
+                    drawtext(center, getFeatureName(i), 0.01, 0.01);
+            } 
+            }
+        }
+        }
+    }
+}
+
+t_point find_center(unsigned i){
+    unsigned numOfPoints=getFeaturePointCount(i);
+    double x=0.0, y=0.0;
+    for(unsigned j=0; j<numOfPoints; j++){
+        LatLon temp=getFeaturePoint(i,j);
+        x+=temp.lon()*cos(AvgLat);
+        y+=temp.lat();
+    }
+    t_point center(x/numOfPoints,y/numOfPoints );
+    return center;
+}
+ 
+ void   drawPOINames(){
+    t_bound_box currentWorld=get_visible_world();
+    setcolor(BLACK);
+    setfontsize(8);
+    if(zoom_level>=7) 
+        for(unsigned i=0; i<positionPOI.size(); i++){
+            LatLon temp=positionPOI[i];
+            if(currentWorld.intersects(temp.lon()*cos(AvgLat), temp.lat())){
+                std::string POIname=getPointOfInterestName(i);
+                
+                drawtext(temp.lon()*cos(AvgLat), temp.lat(), POIname, 0.01, 0.01);
+            }
+         }
+ }

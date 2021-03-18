@@ -1,0 +1,40 @@
+/*
+ * To change this license header, choose License Headers in Project Properties.
+ * To change this template file, choose Tools | Templates
+ * and open the template in the editor.
+ */
+#include "m1.h"
+#include "m3.h"
+#include "StreetsDatabaseAPI.h"
+
+
+double compute_path_travel_time(const std::vector<unsigned>& path, 
+                                const double turn_penalty){
+    if(path.size()==0) return -1.0;
+    else {
+        double tot_time=0;
+    
+        for(unsigned i=0; i<path.size()-1; i++){
+            unsigned Seg_index1=path[i];
+            unsigned Seg_index2=path[i+1];
+            double time=find_street_segment_travel_time(Seg_index1);
+            
+            tot_time+=time;
+            StreetSegmentInfo temp1=getStreetSegmentInfo(Seg_index1);
+            StreetSegmentInfo temp2=getStreetSegmentInfo(Seg_index2);
+            if(temp1.streetID!=temp2.streetID) tot_time+=turn_penalty;
+        }
+        
+        return tot_time;
+    }
+}
+
+
+std::vector<unsigned> find_path_between_intersections(const unsigned intersect_id_start, 
+                                                      const unsigned intersect_id_end,
+                                                      const double turn_penalty){}
+
+
+std::vector<unsigned> find_path_to_point_of_interest(const unsigned intersect_id_start, 
+                                               const std::string point_of_interest_name,
+                                               const double turn_penalty){}
